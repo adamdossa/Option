@@ -3,38 +3,40 @@ pragma solidity ^0.4.10;
 import '../installed_contracts/zeppelin/contracts/token/ERC20.sol';
 import './Option.sol';
 
-contract CallOption is Option {
+contract PutOption is Option {
 
 	function collateralizeOption() payable onlyIssuer {
-		state = State.Live;
-		if (msg.value != 0) {
+    state = State.Live;
+    if (msg.value != strike * notional) {
 			throw;
 		}
-		token.transferFrom(issuer, this, notional);
 		OptionEvent(optionType, issuer, counterparty, state, price, expiry, notional, strike);
 	}
 
-	function exerciseOption() payable onlyWhen(State.Active) onlyCounterparty {
-		state = State.Exercised;
-		if (block.number > expiry) {
+	function exerciseOption() payable onlyCounterparty {
+    state = State.Exercised;
+    if (msg.value != 0) {
 			throw;
 		}
-		if (msg.value != strike * notional) {
+    if (block.number > expiry) {
 			throw;
 		}
-		token.transfer(counterparty, notional);
+    token.transferFrom(counterparty, this, notional);
+    if (!msg.sender.send(this.balance)) {
+      throw;
+    }
 		OptionEvent(optionType, issuer, counterparty, state, price, expiry, notional, strike);
 	}
 
-	function closeOption() notWhen(State.Active) onlyIssuer {
+	function closeOption() onlyIssuer {
 
-		state = State.Closed;
+    state = State.Closed;
 
-		if (state == State.Live) {
+		if (state == State.Exercised) {
 			token.transfer(issuer, notional);
 		}
 
-		if (state == State.Exercised) {
+		if (state == State.Live) {
 			if (!msg.sender.send(this.balance)) {
 				throw;
 			}
